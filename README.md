@@ -31,6 +31,18 @@ An end-to-end streaming platform that ingests social/news data, enriches it with
    - Streamlit Dashboard: `http://localhost:8501`
    - Spark Master UI: `http://localhost:8090`
 
+## Smoke Test
+
+Run an automated health check for containers, endpoints, and Kafka data flow:
+
+- `powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1`
+
+Useful flags:
+
+- `-SkipBuild`: skip image rebuild when containers already exist
+- `-RunSparkSubmit`: start Spark streaming job in background as part of the smoke test
+- `-RequireAnalytics`: fail if `analytics.sentiment` has no messages
+
 ## Core Kafka Topics
 
 - Raw topics:
