@@ -10,7 +10,8 @@ services:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_started
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -22,12 +23,19 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "echo '' | nc -w 1 localhost 9092 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     ports:
       - "8081:8080"
     environment:
@@ -47,7 +55,8 @@ services:
     volumes:
       - ./processing:/opt/spark-apps
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
 
   spark-worker:
     image: apache/spark:3.5.5
@@ -69,7 +78,8 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     profiles: ["app"]
 
   newsapi-producer:
@@ -81,7 +91,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       NEWS_API_KEY: ${NEWS_API_KEY}
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     profiles: ["app"]
 
   youtube-producer:
@@ -93,7 +104,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     profiles: ["app"]
 
   nlp-service:
@@ -104,7 +116,8 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     profiles: ["app"]
 
   dashboard:
@@ -113,6 +126,9 @@ services:
     container_name: dashboard
     ports:
       - "8501:8501"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     profiles: ["app"]

@@ -1,4 +1,5 @@
 import json
+import os
 from collections import deque
 
 import pandas as pd
@@ -6,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 from kafka import KafkaConsumer
 
-KAFKA_BOOTSTRAP_SERVERS = "kafka:9092"
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092")
 TOPICS = ["enriched.nlp", "analytics.sentiment"]
 MAX_EVENTS = 200
 
@@ -21,15 +22,21 @@ def get_consumer() -> KafkaConsumer:
         *TOPICS,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        auto_offset_reset="latest",
+        auto_offset_reset="earliest",
         group_id="dashboard-consumer",
     )
 
 
 consumer = get_consumer()
+# Seek to beginning to read all available messages
+consumer.poll(timeout_ms=1)  # trigger partition assignment
+for topic_partition in consumer.assignment():
+    consumer.seek_to_beginning(topic_partition)
+
 items = deque(maxlen=MAX_EVENTS)
-for _ in range(50):
-    msg_pack = consumer.poll(timeout_ms=20)
+# Poll for up to 10 seconds to give Kafka time to deliver messages
+for _ in range(100):
+    msg_pack = consumer.poll(timeout_ms=100)
     for messages in msg_pack.values():
         for msg in messages:
             payload = msg.value

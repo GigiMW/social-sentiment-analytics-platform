@@ -1,3 +1,6 @@
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+
 kafka-python==2.3.0
 python-dotenv==1.2.2
 transformers==5.7.0
