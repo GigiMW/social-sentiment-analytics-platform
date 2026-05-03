@@ -60,3 +60,59 @@ services:
       - spark
     volumes:
       - ./processing:/opt/spark-apps
+
+  hackernews-producer:
+    build:
+      context: ./ingestion
+    container_name: hackernews-producer
+    command: python hacker_news_producer.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - kafka
+    profiles: ["app"]
+
+  newsapi-producer:
+    build:
+      context: ./ingestion
+    container_name: newsapi-producer
+    command: python newsapi_producer.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NEWS_API_KEY: ${NEWS_API_KEY}
+    depends_on:
+      - kafka
+    profiles: ["app"]
+
+  youtube-producer:
+    build:
+      context: ./ingestion
+    container_name: youtube-producer
+    command: python youtube_producer.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+    depends_on:
+      - kafka
+    profiles: ["app"]
+
+  nlp-service:
+    build:
+      context: ./nlp_service
+    container_name: nlp-service
+    command: python enricher.py
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - kafka
+    profiles: ["app"]
+
+  dashboard:
+    build:
+      context: ./dashboard
+    container_name: dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      - kafka
+    profiles: ["app"]
