@@ -7,7 +7,9 @@ import plotly.express as px
 import streamlit as st
 from kafka import KafkaConsumer
 
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+KAFKA_USERNAME = os.getenv("KAFKA_USERNAME")
+KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD")
 TOPICS = ["enriched.nlp", "analytics.sentiment"]
 MAX_EVENTS = 200
 
@@ -18,13 +20,23 @@ st.caption("Live view of enriched and aggregated sentiment events from Kafka")
 
 @st.cache_resource
 def get_consumer() -> KafkaConsumer:
-    return KafkaConsumer(
-        *TOPICS,
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        auto_offset_reset="earliest",
-        group_id="dashboard-consumer",
-    )
+    consumer_kwargs = {
+        "bootstrap_servers": KAFKA_BOOTSTRAP_SERVERS,
+        "value_deserializer": lambda v: json.loads(v.decode("utf-8")),
+        "auto_offset_reset": "earliest",
+        "group_id": "dashboard-consumer",
+    }
+    
+    # Add SASL auth if credentials provided (for managed Kafka like Confluent Cloud)
+    if KAFKA_USERNAME and KAFKA_PASSWORD:
+        consumer_kwargs.update({
+            "security_protocol": "SASL_SSL",
+            "sasl_mechanism": "PLAIN",
+            "sasl_plain_username": KAFKA_USERNAME,
+            "sasl_plain_password": KAFKA_PASSWORD,
+        })
+    
+    return KafkaConsumer(*TOPICS, **consumer_kwargs)
 
 
 consumer = get_consumer()

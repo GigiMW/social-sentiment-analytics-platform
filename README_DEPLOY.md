@@ -2,16 +2,40 @@ Deployment guide — Streamlit dashboard
 
 This file explains two deployment paths: quick demo on Streamlit Community Cloud and production container deployment (Google Cloud Run / Render / Fly).
 
-1) Streamlit Community Cloud (quick demo)
-- Push to GitHub (you already did).
-- Ensure `requirements.txt` at repo root contains minimal packages needed by the dashboard (streamlit, plotly, kafka-python, pandas).
-- In Streamlit Cloud: New app → connect GitHub → select `dashboard/app.py`.
-- Add Secrets (Manage app → Secrets): `KAFKA_BOOTSTRAP_SERVERS`, `NEWS_API_KEY`, `YOUTUBE_API_KEY`, `HF_TOKEN`.
-- Deploy and open the app URL.
+1) Streamlit Community Cloud (quick demo with Managed Kafka)
+
+**Step 1: Set up Confluent Cloud (managed Kafka)**
+- Go to https://confluent.cloud and sign up (free tier available).
+- Create a cluster (choose a region close to Streamlit Cloud US-East).
+- In the cluster, create an API key:
+  - Go to **Cluster settings** → **API keys** → **Create key**.
+  - Save the **API Key** (username) and **Secret** (password).
+- Get the **Bootstrap server** URL from cluster overview (e.g., `pkc-xxx.us-east-1.provider.confluent.cloud:9092`).
+- Verify access: create topics `enriched.nlp` and `analytics.sentiment` (or leave auto-create enabled).
+
+**Step 2: Deploy to Streamlit Cloud**
+- Ensure code is pushed to GitHub.
+- Go to https://streamlit.io/cloud and click **New app**.
+- Select your repo and `dashboard/app.py`.
+- **Important**: Go to **Manage app** (top-right) → **Secrets**.
+- Add the following (copy from Confluent Cloud):
+  ```toml
+  KAFKA_BOOTSTRAP_SERVERS = "pkc-xxx.us-east-1.provider.confluent.cloud:9092"
+  KAFKA_USERNAME = "your-api-key-here"
+  KAFKA_PASSWORD = "your-api-secret-here"
+  ```
+- Click **Save** and redeploy.
+- Streamlit Cloud will now connect to your managed Kafka cluster.
+
+**Step 3: Verify**
+- Open the app URL.
+- You should see a loading message or "No events yet" (until producers send data).
+- If you see an error, check the logs in Streamlit Cloud (Manage app → Logs).
 
 Notes:
-- Streamlit Cloud cannot reach a local Docker Kafka cluster. Use a managed Kafka or host the dashboard in the same network as Kafka (Cloud Run + VPC connector or host on same cloud provider).
-- Keep heavy model deps out of the Streamlit container; run `nlp_service` separately (Cloud Run / VM) and use Kafka to stream enriched events.
+- Streamlit Cloud **cannot** reach localhost Kafka; it must use a managed/cloud Kafka service.
+- Keep heavy ML models out of Streamlit; run `nlp_service` separately (e.g., on Cloud Run) and use Kafka to stream enriched events.
+
 
 2) Production (recommended): Docker → Google Cloud Run (example)
 Prereqs:
