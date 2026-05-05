@@ -1,74 +1,110 @@
-Deployment guide — Streamlit dashboard
+# Deployment Guide — Sentiment Platform (Completely Free, No Credit Card)
 
-This file explains two deployment paths: quick demo on Streamlit Community Cloud and production container deployment (Google Cloud Run / Render / Fly).
+This guide covers three free deployment options: Railway (recommended), Render, or Cloud Run.
 
-1) Streamlit Community Cloud (quick demo with Managed Kafka)
+---
 
-**Step 1: Set up Confluent Cloud (managed Kafka)**
-- Go to https://confluent.cloud and sign up (free tier available).
-- Create a cluster (choose a region close to Streamlit Cloud US-East).
-- In the cluster, create an API key:
-  - Go to **Cluster settings** → **API keys** → **Create key**.
-  - Save the **API Key** (username) and **Secret** (password).
-- Get the **Bootstrap server** URL from cluster overview (e.g., `pkc-xxx.us-east-1.provider.confluent.cloud:9092`).
-- Verify access: create topics `enriched.nlp` and `analytics.sentiment` (or leave auto-create enabled).
+## Option 1: Railway.app (✅ RECOMMENDED - Easiest, Completely Free)
 
-**Step 2: Deploy to Streamlit Cloud**
-- Ensure code is pushed to GitHub.
-- Go to https://streamlit.io/cloud and click **New app**.
-- Select your repo and `dashboard/app.py`.
-- **Important**: Go to **Manage app** (top-right) → **Secrets**.
-- Add the following (copy from Confluent Cloud):
-  ```toml
-  KAFKA_BOOTSTRAP_SERVERS = "pkc-xxx.us-east-1.provider.confluent.cloud:9092"
-  KAFKA_USERNAME = "your-api-key-here"
-  KAFKA_PASSWORD = "your-api-secret-here"
-  ```
-- Click **Save** and redeploy.
-- Streamlit Cloud will now connect to your managed Kafka cluster.
+**Why Railway?** No credit card required, free tier includes generous monthly credits, deploy with one click.
 
-**Step 3: Verify**
-- Open the app URL.
-- You should see a loading message or "No events yet" (until producers send data).
-- If you see an error, check the logs in Streamlit Cloud (Manage app → Logs).
+### Step 1: Prepare your code
+- You already pushed to GitHub ✅
+- Make sure `docker-compose.prod.yml` exists (it does) ✅
 
-Notes:
-- Streamlit Cloud **cannot** reach localhost Kafka; it must use a managed/cloud Kafka service.
-- Keep heavy ML models out of Streamlit; run `nlp_service` separately (e.g., on Cloud Run) and use Kafka to stream enriched events.
+### Step 2: Deploy to Railway
+1. Go to https://railway.app
+2. Click **Create New Project** → **Deploy from GitHub repo**
+3. Connect your GitHub account and select `social-sentiment-analytics-platform`
+4. Railway auto-detects `docker-compose.prod.yml` and deploys all services
+5. Wait 3-5 minutes for build/deploy to complete
+6. Click the **dashboard** service → **View** to open the app
 
+### Step 3: Verify
+- You should see the Streamlit dashboard
+- It shows "No events yet" (normal on first load)
+- Check the dashboard logs if there are errors (Railway dashboard → Logs)
 
-2) Production (recommended): Docker → Google Cloud Run (example)
-Prereqs:
-- Google Cloud project, `gcloud` CLI authenticated
-- Docker Hub account (or use GCR/Artifact Registry)
+---
 
-Build & push image (Docker Hub example):
-```bash
-docker build -t <dockerhub-user>/sentiment-dashboard:latest .
-docker login
-docker push <dockerhub-user>/sentiment-dashboard:latest
-```
+## Option 2: Render.com (Free Tier Alternative)
 
-Deploy to Cloud Run:
+**Why Render?** Also free, supports Docker Compose, simple deployment.
+
+### Step 1: Deploy to Render
+1. Go to https://render.com
+2. Sign up (GitHub auth available)
+3. Go to **Dashboard** → **New +** → **Web Service**
+4. Select **Build and deploy from Git**
+5. Authorize GitHub and select your repo
+6. Set **Build command**: `docker-compose -f docker-compose.prod.yml build`
+7. Set **Start command**: `docker-compose -f docker-compose.prod.yml up`
+8. Click **Create Web Service**
+9. Wait for deploy (5-10 minutes)
+
+### Step 2: Verify
+- Once deployed, click the service URL
+- Streamlit dashboard should load
+- Check logs if issues arise
+
+---
+
+## Option 3: Cloud Run (Requires Free Google Cloud Account)
+
+**Why Cloud Run?** Managed, auto-scales, pay only if exceeded free tier.
+
+**Note:** Requires phone verification (for free trial), but no automatic charges.
+
+### Step 1: Set up Google Cloud
 ```bash
 gcloud auth login
 gcloud config set project YOUR_GCP_PROJECT_ID
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com
+```
+
+### Step 2: Deploy
+```bash
+# Build image
+docker build -t gcr.io/YOUR_GCP_PROJECT_ID/sentiment-dashboard:latest -f Dockerfile .
+
+# Push to Container Registry
+docker push gcr.io/YOUR_GCP_PROJECT_ID/sentiment-dashboard:latest
+
+# Deploy to Cloud Run (dashboard only, Kafka separate)
 gcloud run deploy sentiment-dashboard \
-  --image docker.io/<dockerhub-user>/sentiment-dashboard:latest \
+  --image gcr.io/YOUR_GCP_PROJECT_ID/sentiment-dashboard:latest \
   --platform managed --region us-central1 --allow-unauthenticated \
   --memory 1Gi --cpu 1
 ```
 
-Set environment variables in Cloud Run Console (Variables & Secrets) or using Secret Manager.
+**But wait:** This deploys **only the dashboard**. For Kafka + services, use Railway or Render (which support full docker-compose).
 
-Networking (if Kafka is private): create a Serverless VPC connector and add `--vpc-connector MY_CONNECTOR` to `gcloud run deploy`.
+---
 
-3) Render / Fly / Railway
-- All support Docker images or direct GitHub build + environment secrets.
-- Use the same Docker image or point the service to the repo and set the run command to:
-  `streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0`
+## Local Testing Before Deploy
 
-Troubleshooting:
-- If `ModuleNotFoundError` occurs on Streamlit Cloud, add the missing package to the root `requirements.txt` and redeploy.
-- If models are slow to load, pre-download them in your image build or split model work into a separate service.
+To test locally before pushing to cloud:
 
+```bash
+# Use production compose
+docker compose -f docker-compose.prod.yml down -v
+docker compose -f docker-compose.prod.yml up --build
+
+# Open http://localhost:8501 in browser
+# Should show dashboard (may take 30s to populate events)
+```
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| "No events yet" persists | Wait 1-2 min for producers to send data, then refresh |
+| Kafka connection error | Check service logs (Railway/Render dashboard → Logs) |
+| Dashboard crashes | Increase memory allocation in platform settings |
+| Port 8501 in use locally | Use `docker compose -f docker-compose.prod.yml up -d` |
+
+---
+
+**👉 Recommended: Start with Railway.app (fastest, most free resources).**
